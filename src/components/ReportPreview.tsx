@@ -269,10 +269,10 @@ const ReportPreview = ({
                 <tr>
                   <td style={{ ...cellStyle, padding: '20pt 15pt' }} colSpan={3}>
                     <div style={{ fontWeight: 'bold', marginBottom: '12pt', fontSize: '12pt' }}>i) <u>Boundaries for {doc.totalExtentSqFt || '(Total Extent)'} Sq.Ft of land</u></div>
-                    <div style={{ marginBottom: '8pt', lineHeight: '1.8' }}><strong><u>North By</u></strong> - {doc.northBy || '(North By)'}</div>
-                    <div style={{ marginBottom: '8pt', lineHeight: '1.8' }}><strong><u>South By</u></strong> - {doc.southBy || '(South By)'}</div>
-                    <div style={{ marginBottom: '8pt', lineHeight: '1.8' }}><strong><u>East By</u></strong> - {doc.eastBy || '(East By)'}</div>
-                    <div style={{ lineHeight: '1.8' }}><strong><u>West By</u></strong> - {doc.westBy || '(West By)'}</div>
+                    <div style={{ marginBottom: '8pt', lineHeight: '1.5' }}><strong><u>North By</u></strong> - {doc.northBy || '(North By)'}</div>
+                    <div style={{ marginBottom: '8pt', lineHeight: '1.5' }}><strong><u>South By</u></strong> - {doc.southBy || '(South By)'}</div>
+                    <div style={{ marginBottom: '8pt', lineHeight: '1.5' }}><strong><u>East By</u></strong> - {doc.eastBy || '(East By)'}</div>
+                    <div style={{ lineHeight: '1.5' }}><strong><u>West By</u></strong> - {doc.westBy || '(West By)'}</div>
                   </td>
                 </tr>
               </tbody>
