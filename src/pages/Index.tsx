@@ -351,6 +351,20 @@ const Index = () => {
       toast.error("Please upload a template first");
       return;
     }
+    
+    // Reload all deeds first to ensure we have the latest data
+    await loadAllDeeds();
+    
+    // Small delay to ensure state is updated
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    console.log("Download - Current deeds state:", {
+      deeds: deeds.length,
+      deedsTable2: deedsTable2.length,
+      deedsTable3: deedsTable3.length,
+      deedsTable4: deedsTable4.length
+    });
+    
     try {
       const arrayBuffer = await templateFile.arrayBuffer();
       const zip = new PizZip(arrayBuffer);
@@ -371,7 +385,31 @@ const Index = () => {
       xml = xml.replace(/\{\{table1\}\}/gi, "{table1}");
 
       // Replace {table} placeholder with actual Word table XML BEFORE Docxtemplater processes it
-      const validDeeds = deeds.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
+      // Fetch latest deeds directly from database to avoid state sync issues
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || '00000000-0000-0000-0000-000000000000';
+      
+      const { data: allDeedsData, error: deedsError } = await supabase
+        .from("deeds")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+        
+      if (deedsError) {
+        console.error("Error fetching deeds:", deedsError);
+        toast.error("Failed to fetch deeds");
+        return;
+      }
+      
+      const allDeedsFromDb = allDeedsData || [];
+      const mainTableDeeds = allDeedsFromDb.filter(d => !(d as any).table_type || (d as any).table_type === 'table');
+      const validDeeds = mainTableDeeds.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
+      
+      console.log("Deeds from database:", {
+        total: allDeedsFromDb.length,
+        mainTable: mainTableDeeds.length,
+        valid: validDeeds.length
+      });
       if (validDeeds.length > 0) {
         const tableXml = generateWordTableXml(validDeeds);
         // Close the paragraph before table, insert table, open new paragraph after
@@ -390,14 +428,12 @@ const Index = () => {
       }
 
       // Replace {table2} with deeds from table2 (or first document as fallback)
-      if (deedsTable2.length > 0) {
-        const validDeeds2 = deedsTable2.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
-        if (validDeeds2.length > 0) {
-          const table2Xml = generateWordTableXml(validDeeds2);
-          xml = xml.replace(/\{table2\}/gi, '</w:t></w:r></w:p>' + table2Xml + '<w:p><w:r><w:t>');
-        } else {
-          xml = xml.replace(/\{table2\}/gi, 'No deeds added to table 2 yet');
-        }
+      const table2Deeds = allDeedsFromDb.filter(d => (d as any).table_type === 'table2');
+      const validDeeds2 = table2Deeds.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
+      
+      if (validDeeds2.length > 0) {
+        const table2Xml = generateWordTableXml(validDeeds2);
+        xml = xml.replace(/\{table2\}/gi, '</w:t></w:r></w:p>' + table2Xml + '<w:p><w:r><w:t>');
       } else if (documents.length > 0) {
         const firstDocXml = generateDocumentDetailsWordTableXml([documents[0]]);
         xml = xml.replace(/\{table2\}/gi, '</w:t></w:r></w:p>' + firstDocXml + '<w:p><w:r><w:t>');
@@ -406,14 +442,12 @@ const Index = () => {
       }
 
       // Replace {table3} with deeds from table3 (or second document as fallback)
-      if (deedsTable3.length > 0) {
-        const validDeeds3 = deedsTable3.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
-        if (validDeeds3.length > 0) {
-          const table3Xml = generateWordTableXml(validDeeds3);
-          xml = xml.replace(/\{table3\}/gi, '</w:t></w:r></w:p>' + table3Xml + '<w:p><w:r><w:t>');
-        } else {
-          xml = xml.replace(/\{table3\}/gi, 'No deeds added to table 3 yet');
-        }
+      const table3Deeds = allDeedsFromDb.filter(d => (d as any).table_type === 'table3');
+      const validDeeds3 = table3Deeds.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
+      
+      if (validDeeds3.length > 0) {
+        const table3Xml = generateWordTableXml(validDeeds3);
+        xml = xml.replace(/\{table3\}/gi, '</w:t></w:r></w:p>' + table3Xml + '<w:p><w:r><w:t>');
       } else if (documents.length > 1) {
         const secondDocXml = generateDocumentDetailsWordTableXml([documents[1]]);
         xml = xml.replace(/\{table3\}/gi, '</w:t></w:r></w:p>' + secondDocXml + '<w:p><w:r><w:t>');
@@ -422,14 +456,12 @@ const Index = () => {
       }
 
       // Replace {table4} with deeds from table4 (or third document as fallback)
-      if (deedsTable4.length > 0) {
-        const validDeeds4 = deedsTable4.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
-        if (validDeeds4.length > 0) {
-          const table4Xml = generateWordTableXml(validDeeds4);
-          xml = xml.replace(/\{table4\}/gi, '</w:t></w:r></w:p>' + table4Xml + '<w:p><w:r><w:t>');
-        } else {
-          xml = xml.replace(/\{table4\}/gi, 'No deeds added to table 4 yet');
-        }
+      const table4Deeds = allDeedsFromDb.filter(d => (d as any).table_type === 'table4');
+      const validDeeds4 = table4Deeds.filter(deed => deed.deed_type && deed.executed_by && deed.in_favour_of);
+      
+      if (validDeeds4.length > 0) {
+        const table4Xml = generateWordTableXml(validDeeds4);
+        xml = xml.replace(/\{table4\}/gi, '</w:t></w:r></w:p>' + table4Xml + '<w:p><w:r><w:t>');
       } else if (documents.length > 2) {
         const thirdDocXml = generateDocumentDetailsWordTableXml([documents[2]]);
         xml = xml.replace(/\{table4\}/gi, '</w:t></w:r></w:p>' + thirdDocXml + '<w:p><w:r><w:t>');
