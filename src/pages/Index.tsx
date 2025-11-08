@@ -30,7 +30,7 @@ const Index = () => {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [documentName, setDocumentName] = useState("Legal_Scrutiny_Report");
   useEffect(() => {
-    setupRealtimeSubscription();
+    const cleanup = setupRealtimeSubscription();
     loadAllDeeds();
 
     // Load template if coming from Templates page or Drafts page
@@ -58,7 +58,10 @@ const Index = () => {
         toast.success("Draft loaded successfully");
       } else {
         // Clear all data for fresh template
-        clearAllDeedsForFreshTemplate();
+        clearAllDeedsForFreshTemplate().then(() => {
+          // Reload after clearing to ensure state is synced
+          loadAllDeeds();
+        });
         setPlaceholders({});
         setDocuments([]);
         setDeeds([]);
@@ -68,6 +71,8 @@ const Index = () => {
       // Redirect to templates page if no template is loaded
       navigate("/templates");
     }
+
+    return cleanup;
   }, []);
   
   const loadAllDeeds = async () => {
@@ -172,47 +177,62 @@ const Index = () => {
     }
   };
   const setupRealtimeSubscription = () => {
-    const channel = supabase.channel("deeds-changes-index").on("postgres_changes", {
-      event: "*",
-      schema: "public",
-      table: "deeds"
-    }, payload => {
-      if (payload.eventType === "INSERT") {
-        const newDeed = payload.new as Deed;
-        const tableType = (newDeed as any).table_type || 'table';
-        
-        if (tableType === 'table2') {
-          setDeedsTable2(prev => [...prev, newDeed]);
-        } else if (tableType === 'table3') {
-          setDeedsTable3(prev => [...prev, newDeed]);
-        } else if (tableType === 'table4') {
-          setDeedsTable4(prev => [...prev, newDeed]);
-        } else {
-          setDeeds(prev => [...prev, newDeed]);
-        }
-      } else if (payload.eventType === "UPDATE") {
-        const updatedDeed = payload.new as Deed;
-        const tableType = (updatedDeed as any).table_type || 'table';
-        
-        if (tableType === 'table2') {
-          setDeedsTable2(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
-        } else if (tableType === 'table3') {
-          setDeedsTable3(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
-        } else if (tableType === 'table4') {
-          setDeedsTable4(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
-        } else {
-          setDeeds(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
-        }
-      } else if (payload.eventType === "DELETE") {
-        const deletedId = payload.old.id;
-        setDeeds(prev => prev.filter(deed => deed.id !== deletedId));
-        setDeedsTable2(prev => prev.filter(deed => deed.id !== deletedId));
-        setDeedsTable3(prev => prev.filter(deed => deed.id !== deletedId));
-        setDeedsTable4(prev => prev.filter(deed => deed.id !== deletedId));
-      }
-    }).subscribe();
+    // Get user ID for filtering
+    supabase.auth.getUser().then(({ data }) => {
+      const userId = data.user?.id || '00000000-0000-0000-0000-000000000000';
+      
+      const channel = supabase
+        .channel("deeds-changes-index")
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "deeds",
+          filter: `user_id=eq.${userId}`
+        }, payload => {
+          console.log("Deed change detected:", payload.eventType);
+          
+          if (payload.eventType === "INSERT") {
+            const newDeed = payload.new as Deed;
+            const tableType = (newDeed as any).table_type || 'table';
+            
+            if (tableType === 'table2') {
+              setDeedsTable2(prev => [...prev, newDeed]);
+            } else if (tableType === 'table3') {
+              setDeedsTable3(prev => [...prev, newDeed]);
+            } else if (tableType === 'table4') {
+              setDeedsTable4(prev => [...prev, newDeed]);
+            } else {
+              setDeeds(prev => [...prev, newDeed]);
+            }
+            
+            // Reload all deeds to ensure consistency
+            loadAllDeeds();
+          } else if (payload.eventType === "UPDATE") {
+            const updatedDeed = payload.new as Deed;
+            const tableType = (updatedDeed as any).table_type || 'table';
+            
+            if (tableType === 'table2') {
+              setDeedsTable2(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
+            } else if (tableType === 'table3') {
+              setDeedsTable3(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
+            } else if (tableType === 'table4') {
+              setDeedsTable4(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
+            } else {
+              setDeeds(prev => prev.map(deed => deed.id === updatedDeed.id ? updatedDeed : deed));
+            }
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old.id;
+            setDeeds(prev => prev.filter(deed => deed.id !== deletedId));
+            setDeedsTable2(prev => prev.filter(deed => deed.id !== deletedId));
+            setDeedsTable3(prev => prev.filter(deed => deed.id !== deletedId));
+            setDeedsTable4(prev => prev.filter(deed => deed.id !== deletedId));
+          }
+        })
+        .subscribe();
+    });
+    
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeAllChannels();
     };
   };
   const handleTemplateUpload = async (file: File) => {
