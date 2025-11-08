@@ -24,9 +24,57 @@ const ReportPreview = ({
   documents = []
 }: ReportPreviewProps) => {
   const [historyContent, setHistoryContent] = useState<string>("");
+  const [deedTemplates, setDeedTemplates] = useState<Map<string, string>>(new Map());
+  
+  useEffect(() => {
+    loadDeedTemplates();
+  }, []);
+  
   useEffect(() => {
     generateHistoryOfTitle();
   }, [deeds]);
+
+  const loadDeedTemplates = async () => {
+    const { data, error } = await supabase
+      .from("deed_templates")
+      .select("deed_type, preview_template");
+
+    if (error) {
+      console.error("Error loading deed templates:", error);
+      return;
+    }
+
+    const templateMap = new Map<string, string>();
+    (data || []).forEach((t: any) => {
+      if (t?.deed_type) {
+        templateMap.set(String(t.deed_type).trim().toLowerCase(), t.preview_template || "{deedType} executed by {executedBy} in favour of {inFavourOf}");
+      }
+    });
+    setDeedTemplates(templateMap);
+  };
+
+  const generateDeedParticulars = (deed: Deed): string => {
+    const key = String(deed.deed_type || "").trim().toLowerCase();
+    const template = deedTemplates.get(key) || "{deedType} executed by {executedBy} in favour of {inFavourOf}";
+    
+    let particulars = template
+      .replace(/{deedType}/gi, deed.deed_type || "")
+      .replace(/{executedBy}/gi, deed.executed_by || "")
+      .replace(/{inFavourOf}/gi, deed.in_favour_of || "")
+      .replace(/{date}/gi, deed.date || "")
+      .replace(/{documentNumber}/gi, deed.document_number || "")
+      .replace(/{natureOfDoc}/gi, deed.nature_of_doc || "");
+
+    // Replace custom field placeholders
+    if (deed.custom_fields && typeof deed.custom_fields === "object") {
+      Object.entries(deed.custom_fields).forEach(([key, value]) => {
+        const regex = new RegExp(`\\{${key}\\}`, "gi");
+        particulars = particulars.replace(regex, String(value ?? ""));
+      });
+    }
+
+    return particulars;
+  };
   const generateHistoryOfTitle = async () => {
     try {
       const deedsWithType = deeds.filter(d => d.deed_type);
@@ -130,12 +178,12 @@ const ReportPreview = ({
             </tr>
           </thead>
           <tbody>
-            {validDeeds.map((deed, index) => <tr key={deed.id}>
+              {validDeeds.map((deed, index) => <tr key={deed.id}>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{index + 1}</td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.date || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.document_number || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>
-                  {deed.deed_type} executed by <strong>{deed.executed_by}</strong> in favour of <strong>{deed.in_favour_of}</strong>
+                  {generateDeedParticulars(deed)}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.nature_of_doc || '-'}</td>
               </tr>)}
@@ -171,7 +219,7 @@ const ReportPreview = ({
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.date || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.document_number || '-'}</td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>
-                  {deed.deed_type} executed by <strong>{deed.executed_by}</strong> in favour of <strong>{deed.in_favour_of}</strong>
+                  {generateDeedParticulars(deed)}
                 </td>
                 <td style={{ border: '1px solid #000', padding: '6pt' }}>{deed.nature_of_doc || '-'}</td>
               </tr>)}
